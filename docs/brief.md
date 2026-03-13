@@ -49,13 +49,13 @@ The script is not run automatically on startup, rather it is run by a human afte
 
 ## Implementation Notes
 
-# Install UFW
+### Install UFW
 
 - Check UFW is installed: `which ufw`
 - Install UFW: `apt install -y ufw`
 - Check UFW status: `ufw status`
 
-## Enable UFW
+### Enable UFW
 
 - Allow SSH connections: `ufw allow ssh`
 - Enable UFW: `ufw enable`
