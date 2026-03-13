@@ -92,7 +92,7 @@ phase1_system_updates_and_ufw() {
     # UFW will be enabled with SSH port 22 allowed, ensuring connectivity throughout the script
     info "Enabling UFW firewall..."
     
-    if (echo "yes" | ufw enable); then
+    if echo "yes" | ufw enable; then
         success "UFW enabled successfully"
     else
         error "Failed to enable UFW"
@@ -203,7 +203,7 @@ phase2_non_root_user_setup() {
 
     # Step 1: Prompt for a username and validate format
     while true; do
-        read -r -p "Enter the new non-root username: " NEW_USERNAME
+        read -p "Enter the new non-root username: " NEW_USERNAME
 
         if [[ -z "$NEW_USERNAME" ]]; then
             warning "Username cannot be empty"
