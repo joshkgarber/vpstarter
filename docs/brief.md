@@ -17,6 +17,8 @@ The script is not run automatically on startup, rather it is run by a human afte
 
 - Use comments in the script to describe what is being done.
 - Interact with the user to integrate manual remote setup steps.
+- README needed to provide overview and instructions
+    - instructions might include something like (pseudo) `curl (github) | bash`.
 
 **Functional requirements**
 
@@ -28,7 +30,7 @@ The script is not run automatically on startup, rather it is run by a human afte
     - Enable ufw
     - Test ufw
 - New User
-    - create the user (take name as input)
+    - create the user (prompt user for name and password)
     - give the user sudo privileges
     - prompt user to add ssh key to host using ssh-copy-id on the remote system
     - check that ssh key was added successfully
