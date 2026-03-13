@@ -26,7 +26,7 @@ The script is not run automatically on startup, rather it is run by a human afte
     - Install UFW
     - Allow ssh connections
     - Enable ufw
-    - Test
+    - Test ufw
 - New User
     - create the user (take name as input)
     - give the user sudo privileges
