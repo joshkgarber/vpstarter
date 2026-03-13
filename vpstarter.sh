@@ -563,6 +563,125 @@ EOF
 }
 
 # ==========================================
+# PHASE 5: Fail2ban SSH Jail Testing
+# ==========================================
+
+phase4_fail2ban_jail_testing() {
+    info "Starting Phase 5: Fail2ban SSH Jail Testing"
+    echo "=========================================="
+
+    local server_host
+    server_host=$(hostname -f 2>/dev/null || hostname)
+
+    # Step 1: Provide clear manual test instructions from docs/testing_fail2ban.md
+    warning "Manual step required: trigger failed SSH logins from your local machine"
+    info "Use one or more of the following commands from your local machine to trigger the sshd jail:"
+    echo "  ssh -p $SSH_CUSTOM_PORT nonexistent@$server_host"
+    echo "  ssh -p $SSH_CUSTOM_PORT -i /wrong/key/path $NEW_USERNAME@$server_host"
+    echo "  for i in {1..5}; do ssh -p $SSH_CUSTOM_PORT baduser@$server_host 2>/dev/null; done"
+    info "Run enough failed attempts to exceed maxretry (currently 3)."
+
+    # Step 2: Prompt for the user's source IP address
+    local test_ip
+    while true; do
+        read -p "Enter your public IP address (the one making failed SSH attempts): " test_ip
+        if [[ -z "$test_ip" ]]; then
+            warning "IP address cannot be empty"
+            continue
+        fi
+
+        if [[ "$test_ip" =~ ^[0-9a-fA-F:.]+$ ]]; then
+            break
+        fi
+
+        warning "Enter a valid IPv4 or IPv6 address format"
+    done
+
+    # Step 3: Wait for user confirmation before checking jail status
+    local login_attempts_confirmed
+    while true; do
+        read -p "Type 'done' after you attempted failed logins: " login_attempts_confirmed
+        if [[ "${login_attempts_confirmed,,}" == "done" ]]; then
+            break
+        fi
+        warning "Please perform failed login attempts first, then type 'done'."
+    done
+
+    # Step 4: Check sshd jail status and verify the user's IP is banned
+    local sshd_status
+    local banned_ip_line
+    local ip_banned=false
+    local max_checks=12
+    local check_interval_seconds=5
+
+    info "Checking sshd jail for banned IP: $test_ip"
+    for ((attempt=1; attempt<=max_checks; attempt++)); do
+        sshd_status=$(fail2ban-client status sshd 2>/dev/null || true)
+
+        if [[ -z "$sshd_status" ]]; then
+            warning "Could not read sshd jail status on attempt $attempt"
+        else
+            info "sshd jail status (attempt $attempt/$max_checks):"
+            echo "$sshd_status"
+
+            banned_ip_line=$(echo "$sshd_status" | sed -n 's/.*Banned IP list:[[:space:]]*//p')
+
+            if [[ -n "$banned_ip_line" ]]; then
+                for banned_ip in $banned_ip_line; do
+                    if [[ "$banned_ip" == "$test_ip" ]]; then
+                        ip_banned=true
+                        break
+                    fi
+                done
+            fi
+        fi
+
+        if [[ "$ip_banned" == true ]]; then
+            break
+        fi
+
+        if [[ "$attempt" -lt "$max_checks" ]]; then
+            warning "IP $test_ip not yet banned. Retrying in $check_interval_seconds seconds..."
+            sleep "$check_interval_seconds"
+        fi
+    done
+
+    if [[ "$ip_banned" != true ]]; then
+        error "IP $test_ip was not found in the banned IP list after $((max_checks * check_interval_seconds)) seconds"
+    fi
+
+    success "Confirmed: IP $test_ip appears in the sshd banned IP list"
+
+    # Step 5: Unban and verify unban success
+    info "Unbanning IP: $test_ip"
+    fail2ban-client set sshd unbanip "$test_ip" || error "Failed to unban IP $test_ip"
+    success "Unban command sent for IP $test_ip"
+
+    sshd_status=$(fail2ban-client status sshd 2>/dev/null || true)
+    info "sshd jail status after unban:"
+    echo "$sshd_status"
+
+    if echo "$sshd_status" | sed -n 's/.*Banned IP list:[[:space:]]*//p' | grep -qw "$test_ip"; then
+        error "IP $test_ip still appears in banned IP list after unban"
+    fi
+
+    success "Verified: IP $test_ip is no longer in the banned IP list"
+
+    # Step 6: User confirms test completion
+    local test_complete_confirm
+    while true; do
+        read -p "Type 'yes' to confirm Fail2ban jail testing is complete: " test_complete_confirm
+        if [[ "${test_complete_confirm,,}" == "yes" ]]; then
+            break
+        fi
+        warning "Please type 'yes' when you are satisfied the test completed successfully."
+    done
+
+    success "Phase 5 completed: Fail2ban SSH jail test verified, unban verified, and user confirmed completion"
+    echo "=========================================="
+}
+
+# ==========================================
 # Main Script Execution
 # ==========================================
 
@@ -584,8 +703,10 @@ main() {
     # Run Phase 4: Fail2ban Setup
     phase4_fail2ban_setup
 
-    # Future phases will be implemented here
-    info "Phases 1 through 4 complete. Additional phases will be implemented in subsequent updates."
+    # Run Phase 5: Fail2ban SSH Jail Testing
+    phase4_fail2ban_jail_testing
+
+    info "Phases 1 through 5 complete. VPS hardening workflow finished."
 }
 
 # Execute main function
