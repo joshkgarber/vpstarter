@@ -203,7 +203,7 @@ phase2_non_root_user_setup() {
 
     # Step 1: Prompt for a username and validate format
     while true; do
-        read -p "Enter the new non-root username: " NEW_USERNAME
+        read -r -p "Enter the new non-root username: " NEW_USERNAME
 
         if [[ -z "$NEW_USERNAME" ]]; then
             warning "Username cannot be empty"
