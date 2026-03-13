@@ -92,7 +92,7 @@ phase1_system_updates_and_ufw() {
     # UFW will be enabled with SSH port 22 allowed, ensuring connectivity throughout the script
     info "Enabling UFW firewall..."
     
-    if echo "yes" | ufw enable; then
+    if (echo "yes" | ufw enable); then
         success "UFW enabled successfully"
     else
         error "Failed to enable UFW"
