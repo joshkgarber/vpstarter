@@ -29,14 +29,14 @@ The script is not run automatically on startup, rather it is run by a human afte
 - New User
     - create the user (take name as input)
     - give the user sudo privileges
-    - instruct to add ssh key to host using ssh-copy-id on the remote system
+    - prompt user to add ssh key to host using ssh-copy-id on the remote system
     - check that ssh key was added successfully
 - SSH
     - check status
     - enable if needed
     - configure and harden
         - take custom port number as input (provide a pseudo-random suggestion)
-    - output ready-made host file contents
+    - print ready-made host file contents to file and provide `scp` command for convenience to the user.
 - Fail2ban
     - install
     - create config file
@@ -47,7 +47,9 @@ The script is not run automatically on startup, rather it is run by a human afte
 
 ---
 
-## Implementation Notes
+## Implementation Notes (and How-Tos)
+
+These notes provide relevant information and commands which can be used to enable the implementation of the functional requirements.
 
 ### Install UFW
 
@@ -62,7 +64,7 @@ The script is not run automatically on startup, rather it is run by a human afte
 
 ### Enable SSH
 
-SSH is usually installed and active by default, but might not be enabled. Enable the ssh service if not already.
+SSH is usually installed and active by default, but might not be enabled. Enable the ssh service if not already enabled.
 
 - View status: `systemctl status ssh`
 - Enable if needed: `systemctl enable ssh`
@@ -71,28 +73,21 @@ SSH is usually installed and active by default, but might not be enabled. Enable
 
 - Create a new user: `adduser <user>`
 
-The command above does the following:
-
-- Creates the user
-- Creates a group with the same name as the user and adds the user to that group
-- Creates a home directory for the user with skeleton files like `.bashrc`
-- Adds the user to the `users` group
-
 ### Give the non-root user sudo privileges
 
 - Give the user sudo privileges: `adduser <user> sudo`
 
 ### Add a remote SSH key
 
-- Create an ssh key: `ssh-keygen -C "your_email@example.com"`
-- Add an SSH key to the host: `ssh-copy-id -i identity_file user@hostname` (run on the remote system)
-- Check it was added correctly: read the `./ssh_key_validator.md` file for detailed implementation example.
+- Create an ssh key: `ssh-keygen -C "your_email@example.com"` (to be run on the remote system)
+- Add an SSH key to the host: `ssh-copy-id -i identity_file user@hostname` (to be run on the remote system)
+- Check it was added correctly: read the `docs/ssh_key_validator.md` file for detailed implementation example.
 
 ### Configure and harden SSH
 
 Upgrade the security of ssh connections: 
 
-- Set the port number to something other than 22 to evade unwanted connections: read the `./ssh_random_port_generator.md` file for a detailed impelementation example.
+- Set the port number to something other than 22 to evade unwanted connections: read the `docs/ssh_random_port_generator.md` file for a detailed impelementation example.
 - Disable password authentication to force ssh keys.
     - Change PasswordAuthentication yes to no
     - Change PermitRootLogin to prohibit-password
@@ -122,10 +117,10 @@ Install via apt:
 
 ```
 apt update
-apt install fail2ban
+apt install -y fail2ban
 ```
 
-Create a config file: `sudo cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local`
+Create a config file: `/etc/fail2ban/jail.d/sshd.conf` (see `docs/fail2ban_config_precedence.md`).
 
 In that file, configure the `ssh` jail:
 
@@ -140,6 +135,8 @@ findtime = 600
 
 The config above means three failed attempts in 10 minutes → banned for an hour.
 
+Restart and enable fail2ban to effect the changes and ensure fail2ban runs on startup:
+
 ```
 systemctl restart fail2ban
 systemctl enable fail2ban
@@ -152,10 +149,10 @@ systemctl enable fail2ban
 
 ### Test Fail2Ban
 
-Follow these steps to test the `sshd` jail.
+Following these steps will test the `sshd` jail:
 
-1. Trigger the jail by failing login several times
+1. Trigger the jail by failing login several times (for examples see `docs/test_fail2ban.md`)
 2. Check the jail with `fail2ban-client status sshd`
-3. You should see the IP in the list of banned IPs.
+3. The user's IP should be in the list of banned IPs. (ask the user to input their IP)
 
 To unban the IP address: `fail2ban-client set sshd unbanip 111.111.111.111`
