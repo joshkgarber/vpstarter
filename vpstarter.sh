@@ -682,6 +682,177 @@ phase5_fail2ban_jail_testing() {
 }
 
 # ==========================================
+# PHASE 6: Generate Final Report and Connection Instructions
+# ==========================================
+
+phase6_final_report() {
+    info "Starting Phase 6: Final Report and Connection Instructions"
+    echo "=========================================="
+
+    # Gather server information
+    local server_host
+    local server_ip
+    local report_timestamp
+    local ssh_config_file
+    local temp_config_dir
+    local temp_config_file
+
+    server_host=$(hostname -f 2>/dev/null || hostname)
+    server_ip=$(hostname -I | awk '{print $1}')
+    report_timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+
+    # Create temporary directory for SSH config
+    temp_config_dir="/tmp/vpstarter-config"
+    temp_config_file="$temp_config_dir/ssh_config"
+
+    mkdir -p "$temp_config_dir"
+
+    # Generate SSH config file content
+    ssh_config_file="$temp_config_file"
+    cat > "$ssh_config_file" << EOF
+Host $server_host
+    Hostname $server_ip
+    Port $SSH_CUSTOM_PORT
+    User $NEW_USERNAME
+    IdentityFile ~/.ssh/id_ed25519
+
+EOF
+
+    # Set appropriate permissions
+    chmod 644 "$ssh_config_file"
+
+    # Generate comprehensive report
+    echo ""
+    echo "================================================================================"
+    echo "                        VPS KICKSTARTER FINAL REPORT"
+    echo "================================================================================"
+    echo ""
+    echo "Report Generated: $report_timestamp"
+    echo "Server Hostname:  $server_host"
+    echo "Server IP:        $server_ip"
+    echo ""
+    echo "================================================================================"
+    echo "                    1. SYSTEM UPDATES PERFORMED"
+    echo "================================================================================"
+    echo ""
+    echo "  - Package lists updated: apt update"
+    echo "  - System packages upgraded: apt -y upgrade"
+    echo ""
+    echo "================================================================================"
+    echo "                    2. UFW (FIREWALL) STATUS AND RULES"
+    echo "================================================================================"
+    echo ""
+    echo "Current UFW Status:"
+    ufw status
+    echo ""
+    echo "================================================================================"
+    echo "                    3. SSH CONFIGURATION CHANGES"
+    echo "================================================================================"
+    echo ""
+    echo "  - Custom SSH Port: $SSH_CUSTOM_PORT"
+    echo "  - Password Authentication: Disabled (no)"
+    echo "  - PermitRootLogin: prohibit-password (key-only)"
+    echo "  - Backup created: /etc/ssh/sshd_config.backup.*"
+    echo ""
+    echo "================================================================================"
+    echo "                    4. FAIL2BAN CONFIGURATION"
+    echo "================================================================================"
+    echo ""
+    echo "  - Configuration file: /etc/fail2ban/jail.d/sshd.conf"
+    echo "  - SSH Jail Settings:"
+    echo "    * enabled: true"
+    echo "    * port: $SSH_CUSTOM_PORT"
+    echo "    * maxretry: 3"
+    echo "    * bantime: 3600 seconds (1 hour)"
+    echo "    * findtime: 600 seconds (10 minutes)"
+    echo "  - Effect: 3 failed login attempts in 10 minutes results in a 1-hour ban"
+    echo ""
+    echo "  Current Jail Status:"
+    fail2ban-client status sshd 2>/dev/null || echo "    (Jail status unavailable)"
+    echo ""
+    echo "================================================================================"
+    echo "                    5. USER CREATION DETAILS"
+    echo "================================================================================"
+    echo ""
+    echo "  - Username: $NEW_USERNAME"
+    echo "  - Sudo privileges: Granted"
+    echo "  - SSH key authentication: Enabled"
+    echo "  - Authorized keys file: /home/$NEW_USERNAME/.ssh/authorized_keys"
+    echo ""
+    echo "================================================================================"
+    echo "                    6. SECURITY MEASURES IMPLEMENTED"
+    echo "================================================================================"
+    echo ""
+    echo "  - UFW firewall enabled and configured"
+    echo "  - SSH hardened with custom port and key-only authentication"
+    echo "  - Root login restricted to key-only access"
+    echo "  - Password authentication disabled for SSH"
+    echo "  - Fail2ban active with sshd jail monitoring failed login attempts"
+    echo "  - Non-root user created with sudo privileges"
+    echo "  - SSH keys validated for secure authentication"
+    echo ""
+    echo "================================================================================"
+    echo "                 SSH HOST CONFIG FILE"
+    echo "================================================================================"
+    echo ""
+    echo "The following SSH config has been generated at:"
+    echo "  $ssh_config_file"
+    echo ""
+    echo "Config file contents:"
+    echo "--------------------------------------------------------------------------------"
+    cat "$ssh_config_file"
+    echo "--------------------------------------------------------------------------------"
+    echo ""
+    echo "================================================================================"
+    echo "                 HOW TO COPY CONFIG TO YOUR LOCAL MACHINE"
+    echo "================================================================================"
+    echo ""
+    echo "Run the following command on your LOCAL machine to copy the config:"
+    echo ""
+    echo "  scp -P $SSH_CUSTOM_PORT $NEW_USERNAME@$server_ip:$ssh_config_file ~/.ssh/config"
+    echo ""
+    echo "Or use the following command to append it to your existing config:"
+    echo ""
+    echo "  scp -P $SSH_CUSTOM_PORT $NEW_USERNAME@$server_ip:$ssh_config_file /tmp/vps-ssh-config && cat /tmp/vps-ssh-config >> ~/.ssh/config"
+    echo ""
+    echo "================================================================================"
+    echo "                 FINAL CONNECTION COMMAND"
+    echo "================================================================================"
+    echo ""
+    echo "Once the config is in place, connect using:"
+    echo ""
+    echo "  ssh $server_host"
+    echo ""
+    echo "Or connect directly (without config file):"
+    echo ""
+    echo "  ssh -p $SSH_CUSTOM_PORT $NEW_USERNAME@$server_ip"
+    echo ""
+    echo "================================================================================"
+    echo "                            IMPORTANT NOTES"
+    echo "================================================================================"
+    echo ""
+    echo "  - SSH is now running on port $SSH_CUSTOM_PORT"
+    echo "  - Port 22 has been denied in UFW (if applicable)"
+    echo "  - Keep your SSH private key secure - it's your only authentication method"
+    echo "  - The server will now reject password-based SSH login attempts"
+    echo "  - Fail2ban will ban IPs that make 3+ failed login attempts in 10 minutes"
+    echo ""
+    echo "================================================================================"
+    echo "                          SETUP COMPLETE!"
+    echo "================================================================================"
+    echo ""
+    success "VPS Kickstarter provisioning completed successfully!"
+    echo ""
+    echo "Your server is now hardened and ready for use."
+    echo "Connection details have been saved to: $ssh_config_file"
+    echo ""
+    echo "================================================================================"
+    echo ""
+    success "Phase 6 completed: Final report generated and connection instructions provided"
+    echo "=========================================="
+}
+
+# ==========================================
 # Main Script Execution
 # ==========================================
 
@@ -706,7 +877,8 @@ main() {
     # Run Phase 5: Fail2ban SSH Jail Testing
     phase5_fail2ban_jail_testing
 
-    info "Phases 1 through 5 complete. VPS hardening workflow finished."
+    # Run Phase 6: Final Report and Connection Instructions
+    phase6_final_report
 }
 
 # Execute main function
