@@ -16,6 +16,7 @@ The script is not run automatically on startup, rather it is run by a human afte
 **Non-functional requirements**
 
 - Use comments in the script to describe what is being done.
+- Interact with the user to integrate manual remote setup steps.
 
 **Functional requirements**
 
