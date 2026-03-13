@@ -247,7 +247,7 @@ phase2_non_root_user_setup() {
     done
 
     info "Creating user '$NEW_USERNAME'..."
-    adduser --gecos "" --disabled-password "$NEW_USERNAME" || error "Failed to create user $NEW_USERNAME"
+    adduser --disabled-password "$NEW_USERNAME" || error "Failed to create user $NEW_USERNAME"
     echo "$NEW_USERNAME:$password_one" | chpasswd || error "Failed to set password for $NEW_USERNAME"
     unset password_one password_two
     success "User '$NEW_USERNAME' created successfully"
