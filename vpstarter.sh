@@ -291,6 +291,107 @@ phase2_ssh_hardening() {
 }
 
 # ==========================================
+# PHASE 3: Fail2ban Setup
+# ==========================================
+
+phase3_fail2ban_setup() {
+    info "Starting Phase 3: Fail2ban Setup"
+    echo "=========================================="
+    
+    # Step 1: Install fail2ban
+    # Fail2ban protects the server from brute-force attacks by monitoring logs
+    info "Installing fail2ban..."
+    if apt install -y fail2ban; then
+        success "Fail2ban installed successfully"
+    else
+        error "Failed to install fail2ban"
+    fi
+    
+    # Step 2: Create jail.d directory if it doesn't exist
+    # Using jail.d/ for configuration overrides is best practice per docs/fail2ban_config_precedence.md
+    info "Creating fail2ban jail.d directory..."
+    if mkdir -p /etc/fail2ban/jail.d; then
+        success "jail.d directory ready"
+    else
+        error "Failed to create jail.d directory"
+    fi
+    
+    # Step 3: Create SSH jail configuration file
+    # Configuration precedence: jail.d/sshd.conf overrides jail.local and jail.conf
+    info "Creating SSH jail configuration..."
+    local sshd_jail_conf="/etc/fail2ban/jail.d/sshd.conf"
+    
+    # Using the SSH port from Phase 2
+    # Configuration values: maxretry=3, bantime=3600 (1 hour), findtime=600 (10 minutes)
+    cat > "$sshd_jail_conf" << EOF
+[sshd]
+enabled = true
+port = $SSH_CUSTOM_PORT
+maxretry = 3
+bantime = 3600
+findtime = 600
+EOF
+    
+    if [[ -f "$sshd_jail_conf" ]]; then
+        success "SSH jail configuration created: $sshd_jail_conf"
+    else
+        error "Failed to create SSH jail configuration"
+    fi
+    
+    # Step 4: Document configuration precedence
+    info "Configuration precedence documented:"
+    echo "  - /etc/fail2ban/jail.conf (default settings)"
+    echo "  - /etc/fail2ban/jail.local (overrides)"
+    echo "  - /etc/fail2ban/jail.d/sshd.conf (SSH-specific overrides - THIS FILE)"
+    
+    # Step 5: Restart fail2ban to apply configuration
+    info "Restarting fail2ban..."
+    if systemctl restart fail2ban; then
+        success "Fail2ban restarted successfully"
+    else
+        error "Failed to restart fail2ban"
+    fi
+    
+    # Step 6: Enable fail2ban to start on boot
+    info "Enabling fail2ban on boot..."
+    if systemctl enable fail2ban; then
+        success "Fail2ban enabled for startup"
+    else
+        error "Failed to enable fail2ban for startup"
+    fi
+    
+    # Step 7: Verify fail2ban is running
+    info "Verifying fail2ban status..."
+    if systemctl is-active --quiet fail2ban; then
+        success "Fail2ban is running"
+    else
+        error "Fail2ban is not running"
+    fi
+    
+    # Step 8: Check jail status
+    info "Checking SSH jail status..."
+    if fail2ban-client status sshd > /dev/null 2>&1; then
+        success "SSHD jail is active and monitoring port $SSH_CUSTOM_PORT"
+        info "Jail details:"
+        fail2ban-client status sshd || warning "Could not retrieve jail status"
+    else
+        warning "SSHD jail status could not be verified (may need a moment to initialize)"
+    fi
+    
+    # Step 9: Display configuration summary
+    info "Fail2ban SSH Jail Configuration:"
+    echo "  - enabled: true"
+    echo "  - port: $SSH_CUSTOM_PORT"
+    echo "  - maxretry: 3"
+    echo "  - bantime: 3600 seconds (1 hour)"
+    echo "  - findtime: 600 seconds (10 minutes)"
+    echo "  - Effect: 3 failed attempts in 10 minutes = 1 hour ban"
+    
+    success "Phase 3 completed: Fail2ban installed and SSH jail configured"
+    echo "=========================================="
+}
+
+# ==========================================
 # Main Script Execution
 # ==========================================
 
@@ -306,8 +407,11 @@ main() {
     # Run Phase 2: SSH Hardening
     phase2_ssh_hardening
     
+    # Run Phase 3: Fail2ban Setup
+    phase3_fail2ban_setup
+    
     # Future phases will be implemented here
-    info "Phases 1 and 2 complete. Additional phases will be implemented in subsequent updates."
+    info "Phases 1, 2, and 3 complete. Additional phases will be implemented in subsequent updates."
 }
 
 # Execute main function
