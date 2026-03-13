@@ -685,7 +685,7 @@ phase5_fail2ban_jail_testing() {
 # PHASE 6: Generate Final Report and Connection Instructions
 # ==========================================
 
-phase6_final_report_and_connection() {
+phase6_final_report() {
     info "Starting Phase 6: Final Report and Connection Instructions"
     echo "=========================================="
 
@@ -847,41 +847,8 @@ EOF
     echo "Connection details have been saved to: $ssh_config_file"
     echo ""
     echo "================================================================================"
-
-    # Final confirmation
-    local final_confirm
-    warning "IMPORTANT: After this final confirmation, the script will restart SSH service"
-    warning "          to apply all changes (port change to $SSH_CUSTOM_PORT)."
     echo ""
-    read -p "Type 'ready' to restart SSH service and complete the setup: " final_confirm
-
-    if [[ "${final_confirm,,}" != "ready" ]]; then
-        warning "Setup paused. Run the script again to complete when ready."
-        warning "SSH is still running on port 22 until you confirm."
-        return 1
-    fi
-
-    # Restart SSH service to apply all changes
-    info "Restarting SSH service to apply configuration changes..."
-    if systemctl restart ssh; then
-        success "SSH service restarted successfully on port $SSH_CUSTOM_PORT"
-    else
-        error "Failed to restart SSH service. Check configuration manually."
-    fi
-
-    # Deny port 22 in UFW after SSH restart
-    info "Configuring UFW to deny SSH on port 22..."
-    if ufw deny ssh; then
-        success "UFW: SSH on port 22 now denied"
-    else
-        warning "Failed to deny port 22 in UFW - you may need to do this manually"
-    fi
-
-    # Display final status
-    info "Final UFW status:"
-    ufw status
-
-    success "Phase 6 completed: Final report generated and SSH service restarted"
+    success "Phase 6 completed: Final report generated and connection instructions provided"
     echo "=========================================="
 }
 
@@ -911,9 +878,7 @@ main() {
     phase5_fail2ban_jail_testing
 
     # Run Phase 6: Final Report and Connection Instructions
-    phase6_final_report_and_connection
-
-    success "All phases complete. VPS hardening workflow finished successfully!"
+    phase6_final_report
 }
 
 # Execute main function
