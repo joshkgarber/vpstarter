@@ -316,7 +316,7 @@ generate_ssh_port() {
     echo "$port"
 }
 
-phase2_ssh_hardening() {
+phase3_ssh_hardening() {
     info "Starting Phase 3: SSH Hardening"
     echo "=========================================="
     
@@ -465,7 +465,7 @@ phase2_ssh_hardening() {
 # PHASE 4: Fail2ban Setup
 # ==========================================
 
-phase3_fail2ban_setup() {
+phase4_fail2ban_setup() {
     info "Starting Phase 4: Fail2ban Setup"
     echo "=========================================="
     
@@ -698,10 +698,10 @@ main() {
     phase2_non_root_user_setup
 
     # Run Phase 3: SSH Hardening
-    phase2_ssh_hardening
+    phase3_ssh_hardening
 
     # Run Phase 4: Fail2ban Setup
-    phase3_fail2ban_setup
+    phase4_fail2ban_setup
 
     # Run Phase 5: Fail2ban SSH Jail Testing
     phase4_fail2ban_jail_testing
