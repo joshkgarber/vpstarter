@@ -77,9 +77,19 @@ phase1_system_updates_and_ufw() {
         fi
     fi
     
-    # Step 4: Enable UFW
-    # UFW will be enabled without any rules initially
-    # SSH rules will be configured in Phase 2 after SSH hardening
+    # Step 4: Allow SSH on port 22 for the duration of the script
+    # This ensures the current SSH session remains connected while we work
+    # Port 22 will remain open throughout the entire script until the final phase
+    info "Allowing SSH on port 22 (will remain open until final confirmation)..."
+    
+    if ufw allow ssh; then
+        success "UFW rule added: allow SSH on port 22"
+    else
+        error "Failed to add UFW rule for SSH port 22. This is required to maintain connectivity."
+    fi
+    
+    # Step 5: Enable UFW
+    # UFW will be enabled with SSH port 22 allowed, ensuring connectivity throughout the script
     info "Enabling UFW firewall..."
     
     if ufw enable; then
@@ -88,7 +98,7 @@ phase1_system_updates_and_ufw() {
         error "Failed to enable UFW"
     fi
     
-    # Step 5: Test UFW status and verify it's active
+    # Step 6: Test UFW status and verify it's active
     # This confirms the firewall is running and will protect the server
     info "Verifying UFW status..."
     
@@ -101,10 +111,10 @@ phase1_system_updates_and_ufw() {
     fi
     
     # Display current UFW status for user information
-    info "Current UFW status:"
+    info "Current UFW status (port 22 will remain open for script duration):"
     ufw status
     
-    success "Phase 1 completed: System updated and UFW installed and enabled"
+    success "Phase 1 completed: System updated and UFW installed and enabled with port 22 open"
     echo "=========================================="
 }
 
@@ -162,8 +172,9 @@ phase2_ssh_hardening() {
     local suggested_port=$(generate_ssh_port)
     success "Suggested SSH port: $suggested_port"
     
-    warning "IMPORTANT: Changing the SSH port will disconnect active SSH sessions."
-    warning "Ensure you have an alternative method to access the server if needed."
+    warning "IMPORTANT: SSH configuration will be prepared now, but the SSH service restart"
+    warning "and port change will be deferred until the final confirmation phase."
+    warning "This ensures the script can complete without disconnecting your session."
     echo ""
     
     # Prompt user for port with suggestion as default
@@ -227,56 +238,55 @@ phase2_ssh_hardening() {
     echo "  - PasswordAuthentication: no"
     echo "  - PermitRootLogin: prohibit-password"
     
-    # Step 6: Validate SSH configuration before restarting
-    info "Validating SSH configuration..."
+    # Step 6: Validate SSH configuration without restarting
+    # We validate the config syntax but DO NOT restart SSH yet
+    # Restart is deferred to the final confirmation phase to prevent disconnection
+    info "Validating SSH configuration syntax..."
     if sshd -t; then
-        success "SSH configuration is valid"
+        success "SSH configuration is valid (changes are prepared but not yet active)"
     else
         error "SSH configuration is invalid. Check $ssh_config"
     fi
     
-    # Step 7: Restart SSH service
-    info "Restarting SSH service to apply changes..."
-    if systemctl restart ssh; then
-        success "SSH service restarted successfully"
-    else
-        error "Failed to restart SSH service"
-    fi
+    # IMPORTANT: SSH service is NOT restarted here to prevent disconnection
+    # The configuration changes will take effect after the final confirmation phase
+    warning ""
+    warning "=========================================="
+    warning "SSH RESTART DEFERRED"
+    warning "=========================================="
+    warning "The SSH configuration has been updated and validated."
+    warning "The service restart and port change will occur AFTER"
+    warning "user confirmation in the final phase."
+    warning ""
+    warning "Current status: SSH is still running on port 22"
+    warning "New config: SSH will use port $SSH_CUSTOM_PORT after restart"
+    warning "=========================================="
     
-    # Step 8: Verify SSH is listening on new port
-    info "Verifying SSH is listening on port $SSH_CUSTOM_PORT..."
-    sleep 2  # Give service time to bind
+    # Step 7: Note that SSH is still on port 22 (expected behavior)
+    info "Note: SSH service remains on port 22 until final restart"
+    info "The new port $SSH_CUSTOM_PORT will be active after the deferred restart"
     
-    if ss -tlnp | grep -q ":$SSH_CUSTOM_PORT"; then
-        success "SSH is now listening on port $SSH_CUSTOM_PORT"
-    else
-        warning "Could not verify SSH is listening on port $SSH_CUSTOM_PORT"
-        warning "Please manually verify with: ss -tlnp | grep ssh"
-    fi
+    # Step 8: Configure UFW for custom SSH port (to take effect after restart)
+    # Port 22 remains open throughout the script - do NOT deny it here
+    info "Configuring UFW firewall rules for the new SSH port..."
     
-    # Step 9: Configure UFW for custom SSH port
-    info "Configuring UFW firewall rules..."
-    
-    # Allow the custom SSH port
+    # Allow the custom SSH port - this will take effect after SSH service restart
     if ufw allow "$SSH_CUSTOM_PORT/tcp"; then
-        success "UFW rule added: allow port $SSH_CUSTOM_PORT/tcp"
+        success "UFW rule added: allow port $SSH_CUSTOM_PORT/tcp (effective after SSH restart)"
     else
         error "Failed to add UFW rule for port $SSH_CUSTOM_PORT"
     fi
     
-    # Deny default SSH port (22)
-    if ufw deny ssh; then
-        success "UFW rule added: deny SSH on port 22"
-    else
-        warning "Failed to add UFW deny rule for port 22"
-    fi
+    # NOTE: We do NOT deny port 22 here - it remains open for the script duration
+    # Port 22 will be denied in the final phase after user confirmation
     
-    # Step 10: Verify UFW status
+    # Step 9: Verify UFW status
     info "Verifying UFW status..."
     ufw status verbose
     
-    success "Phase 2 completed: SSH hardened and running on port $SSH_CUSTOM_PORT"
-    info "SSH port $SSH_CUSTOM_PORT has been stored for Fail2ban configuration"
+    success "Phase 2 completed: SSH configuration prepared for port $SSH_CUSTOM_PORT"
+    success "SSH restart deferred to final confirmation phase"
+    info "Port $SSH_CUSTOM_PORT stored in SSH_CUSTOM_PORT for later phases"
     echo "=========================================="
 }
 
