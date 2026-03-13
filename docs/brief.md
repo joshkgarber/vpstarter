@@ -82,13 +82,13 @@ SSH is usually installed and active by default, but might not be enabled. Enable
 
 - Create an ssh key: `ssh-keygen -C "your_email@example.com"` (to be run on the remote system)
 - Add an SSH key to the host: `ssh-copy-id -i identity_file user@hostname` (to be run on the remote system)
-- Check it was added correctly: read the `docs/ssh_key_validator.md` file for detailed implementation example.
+- Check it was added correctly: read the `docs/ssh_key_validation.md` file for detailed implementation example.
 
 ### Configure and harden SSH
 
 Upgrade the security of ssh connections: 
 
-- Set the port number to something other than 22 to evade unwanted connections: read the `docs/ssh_random_port_generator.md` file for a detailed impelementation example.
+- Set the port number to something other than 22 to evade unwanted connections: read the `docs/ssh_random_port_generation.md` file for a detailed impelementation example.
 - Disable password authentication to force ssh keys.
     - Change PasswordAuthentication yes to no
     - Change PermitRootLogin to prohibit-password
@@ -152,8 +152,8 @@ systemctl enable fail2ban
 
 Following these steps will test the `sshd` jail:
 
-1. Trigger the jail by failing login several times (for examples see `docs/test_fail2ban.md`)
+1. Trigger the jail by failing login several times (for examples see `docs/testing_fail2ban.md`)
 2. Check the jail with `fail2ban-client status sshd`
-3. The user's IP should be in the list of banned IPs. (ask the user to input their IP)
+3. The user's IP should be in the list of banned IPs. (prompt the user for their IP in order to check it)
 
 To unban the IP address: `fail2ban-client set sshd unbanip 111.111.111.111`
