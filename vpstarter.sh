@@ -900,52 +900,28 @@ phase7_ssh_restart_and_confirmation() {
     info "Updated UFW status:"
     ufw status
     
-    # Step 4: Restart SSH service
+    # Step 4: Restart SSH service (with background execution)
     echo ""
     info "Restarting SSH service to apply new configuration..."
-    info "New SSH settings will take effect:"
-    echo "  - Port: $SSH_CUSTOM_PORT"
-    echo "  - PasswordAuthentication: no"
-    echo "  - PermitRootLogin: prohibit-password"
-    echo ""
-    
-    # Restart SSH service
-    if systemctl restart ssh; then
-        success "SSH service restarted successfully"
-    else
-        error "Failed to restart SSH service. Check configuration with: sshd -t"
-    fi
-    
-    # Verify SSH is running on the new port
-    sleep 2
-    info "Verifying SSH service is active on port $SSH_CUSTOM_PORT..."
-    if systemctl is-active --quiet ssh; then
-        success "SSH service is running"
-    else
-        warning "SSH service status could not be verified (may still be starting)"
-    fi
-    
-    # Step 5: Display final completion message
-    echo ""
-    echo -e "${GREEN}================================================================================${NC}"
-    echo -e "${GREEN}                         SETUP COMPLETE!                                       ${NC}"
-    echo -e "${GREEN}================================================================================${NC}"
-    echo ""
-    echo -e "${GREEN}SSH service has been restarted with the hardened configuration.${NC}"
-    echo ""
-    echo "Your current connection on port 22 has been terminated."
-    echo ""
-    echo "To reconnect to your server, use:"
+    info "Your current SSH session will be terminated."
+    info "Please reconnect using:"
     echo "  ssh -p $SSH_CUSTOM_PORT $NEW_USERNAME@$(hostname -I | awk '{print $1}')"
     echo ""
-    echo "Or if you copied the SSH config to your local machine:"
-    echo "  ssh $(hostname -f 2>/dev/null || hostname)"
-    echo ""
-    echo -e "${GREEN}================================================================================${NC}"
-    echo ""
     
-    success "Phase 7 completed: SSH service restarted, port 22 denied, setup complete"
-    echo "=========================================="
+    # Perform final verification checks BEFORE restart
+    info "Verifying configuration before restart..."
+    if ! sshd -t; then
+        error "SSH configuration is invalid. Aborting restart."
+        error "Fix the configuration and retry."
+        return 1
+    fi
+    
+    # Execute restart in background so script can exit cleanly
+    (systemctl restart ssh &>/dev/null &) 2>/dev/null
+    
+    success "SSH restart initiated. Please reconnect in a few moments."
+    success "Phase 7 completed: SSH service restart initiated"
+
 }
 
 # ==========================================
