@@ -210,8 +210,8 @@ phase2_non_root_user_setup() {
             continue
         fi
 
-        if ! [[ "$NEW_USERNAME" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
-            warning "Use lowercase letters, numbers, underscores, or hyphens (must start with a letter or underscore)"
+        if ! [[ "$NEW_USERNAME" =~ ^[a-z_][a-z0-9_]*$ ]]; then
+            warning "Use lowercase letters, numbers, or underscores (must start with a letter or underscore)"
             continue
         fi
 
