@@ -145,12 +145,6 @@ phase2_ssh_hardening() {
         success "SSH service is running"
     else
         warning "SSH service is not running"
-        info "Attempting to enable SSH service..."
-        if systemctl enable ssh; then
-            success "SSH service enabled successfully"
-        else
-            error "Failed to enable SSH service"
-        fi
     fi
     
     # Step 2: Verify SSH is enabled for startup
