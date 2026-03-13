@@ -119,11 +119,182 @@ phase1_system_updates_and_ufw() {
 }
 
 # ==========================================
-# PHASE 2: SSH Hardening
+# PHASE 2: Non-root User Setup
 # ==========================================
 
 # Global variable to store SSH port for later phases
 SSH_CUSTOM_PORT=""
+NEW_USERNAME=""
+
+# Validate each key in an authorized_keys file
+# Reference: docs/ssh_key_validation.md
+validate_authorized_keys_file() {
+    local authorized_keys_file="$1"
+    local valid_count=0
+    local invalid_count=0
+
+    if [[ ! -f "$authorized_keys_file" ]]; then
+        warning "authorized_keys file not found: $authorized_keys_file"
+        return 1
+    fi
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        if [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]]; then
+            continue
+        fi
+
+        if echo "$line" | ssh-keygen -i -f - > /dev/null 2>&1; then
+            ((valid_count++))
+        else
+            ((invalid_count++))
+        fi
+    done < "$authorized_keys_file"
+
+    if [[ "$valid_count" -eq 0 ]]; then
+        warning "No valid SSH keys were found in $authorized_keys_file"
+        return 1
+    fi
+
+    if [[ "$invalid_count" -gt 0 ]]; then
+        warning "Found $invalid_count invalid SSH key entries in $authorized_keys_file"
+        return 1
+    fi
+
+    success "SSH key validation passed ($valid_count valid keys)"
+    return 0
+}
+
+ensure_authorized_keys_permissions() {
+    local username="$1"
+    local ssh_dir="/home/$username/.ssh"
+    local authorized_keys_file="$ssh_dir/authorized_keys"
+
+    if [[ ! -d "$ssh_dir" ]]; then
+        warning "SSH directory not found: $ssh_dir"
+        return 1
+    fi
+
+    if [[ ! -f "$authorized_keys_file" ]]; then
+        warning "authorized_keys file not found: $authorized_keys_file"
+        return 1
+    fi
+
+    chown "$username:$username" "$ssh_dir" "$authorized_keys_file" || return 1
+    chmod 700 "$ssh_dir" || return 1
+    chmod 600 "$authorized_keys_file" || return 1
+
+    local ssh_dir_mode
+    local authorized_keys_mode
+    ssh_dir_mode=$(stat -c "%a" "$ssh_dir")
+    authorized_keys_mode=$(stat -c "%a" "$authorized_keys_file")
+
+    if [[ "$ssh_dir_mode" != "700" || "$authorized_keys_mode" != "600" ]]; then
+        warning "Incorrect permissions detected (.ssh=$ssh_dir_mode, authorized_keys=$authorized_keys_mode)"
+        return 1
+    fi
+
+    success "SSH directory and authorized_keys permissions are secure"
+    return 0
+}
+
+phase2_non_root_user_setup() {
+    info "Starting Phase 2: Non-root User Setup"
+    echo "=========================================="
+
+    # Step 1: Prompt for a username and validate format
+    while true; do
+        read -p "Enter the new non-root username: " NEW_USERNAME
+
+        if [[ -z "$NEW_USERNAME" ]]; then
+            warning "Username cannot be empty"
+            continue
+        fi
+
+        if ! [[ "$NEW_USERNAME" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
+            warning "Use lowercase letters, numbers, underscores, or hyphens (must start with a letter or underscore)"
+            continue
+        fi
+
+        if id "$NEW_USERNAME" > /dev/null 2>&1; then
+            warning "User '$NEW_USERNAME' already exists. Choose a different username."
+            continue
+        fi
+
+        break
+    done
+
+    # Step 2: Prompt for password and create the user
+    local password_one
+    local password_two
+
+    while true; do
+        read -s -p "Enter password for $NEW_USERNAME: " password_one
+        echo ""
+        read -s -p "Confirm password for $NEW_USERNAME: " password_two
+        echo ""
+
+        if [[ -z "$password_one" ]]; then
+            warning "Password cannot be empty"
+            continue
+        fi
+
+        if [[ "$password_one" != "$password_two" ]]; then
+            warning "Passwords do not match"
+            continue
+        fi
+
+        break
+    done
+
+    info "Creating user '$NEW_USERNAME'..."
+    adduser --gecos "" --disabled-password "$NEW_USERNAME" || error "Failed to create user $NEW_USERNAME"
+    echo "$NEW_USERNAME:$password_one" | chpasswd || error "Failed to set password for $NEW_USERNAME"
+    unset password_one password_two
+    success "User '$NEW_USERNAME' created successfully"
+
+    # Step 3: Add the user to sudo group
+    info "Adding '$NEW_USERNAME' to sudo group..."
+    adduser "$NEW_USERNAME" sudo || error "Failed to add $NEW_USERNAME to sudo group"
+    success "User '$NEW_USERNAME' now has sudo privileges"
+
+    # Step 4: Manual SSH key copy step from remote client machine
+    warning "Manual step required: add your local SSH public key to this server now"
+    info "Run this command from your local machine:"
+    echo "  ssh-copy-id -i <path_to_public_key> $NEW_USERNAME@<hostname> -p <port>"
+    info "For this phase, the SSH port is still 22."
+    info "Example: ssh-copy-id -i ~/.ssh/id_ed25519.pub $NEW_USERNAME@$(hostname -f) -p 22"
+    info "If your key path is different, replace ~/.ssh/id_ed25519.pub accordingly."
+
+    local copy_confirm
+    while true; do
+        read -p "Type 'yes' after you have completed ssh-copy-id: " copy_confirm
+        if [[ "${copy_confirm,,}" == "yes" ]]; then
+            break
+        fi
+        warning "Please complete the ssh-copy-id step before continuing."
+    done
+
+    # Step 5: Validate authorized_keys for the new user
+    local authorized_keys_path="/home/$NEW_USERNAME/.ssh/authorized_keys"
+    while true; do
+        if validate_authorized_keys_file "$authorized_keys_path" && ensure_authorized_keys_permissions "$NEW_USERNAME"; then
+            break
+        fi
+
+        warning "SSH key validation or permissions checks failed for $authorized_keys_path"
+        read -p "Fix the key setup and type 'retry' to validate again: " copy_confirm
+        if [[ "${copy_confirm,,}" != "retry" ]]; then
+            error "SSH key validation not confirmed. Aborting for safety."
+        fi
+    done
+
+    success "Phase 2 completed: Non-root user created, sudo granted, and SSH key validated"
+    echo "=========================================="
+}
+
+# ==========================================
+# PHASE 3: SSH Hardening
+# ==========================================
 
 # Generate a pseudo-random SSH port (10,000-65,535, avoiding common ports)
 # Reference: docs/ssh_random_port_generation.md
@@ -146,7 +317,7 @@ generate_ssh_port() {
 }
 
 phase2_ssh_hardening() {
-    info "Starting Phase 2: SSH Hardening"
+    info "Starting Phase 3: SSH Hardening"
     echo "=========================================="
     
     # Step 1: Check SSH service status
@@ -284,18 +455,18 @@ phase2_ssh_hardening() {
     info "Verifying UFW status..."
     ufw status verbose
     
-    success "Phase 2 completed: SSH configuration prepared for port $SSH_CUSTOM_PORT"
+    success "Phase 3 completed: SSH configuration prepared for port $SSH_CUSTOM_PORT"
     success "SSH restart deferred to final confirmation phase"
     info "Port $SSH_CUSTOM_PORT stored in SSH_CUSTOM_PORT for later phases"
     echo "=========================================="
 }
 
 # ==========================================
-# PHASE 3: Fail2ban Setup
+# PHASE 4: Fail2ban Setup
 # ==========================================
 
 phase3_fail2ban_setup() {
-    info "Starting Phase 3: Fail2ban Setup"
+    info "Starting Phase 4: Fail2ban Setup"
     echo "=========================================="
     
     # Step 1: Install fail2ban
@@ -387,7 +558,7 @@ EOF
     echo "  - findtime: 600 seconds (10 minutes)"
     echo "  - Effect: 3 failed attempts in 10 minutes = 1 hour ban"
     
-    success "Phase 3 completed: Fail2ban installed and SSH jail configured"
+    success "Phase 4 completed: Fail2ban installed and SSH jail configured"
     echo "=========================================="
 }
 
@@ -403,15 +574,18 @@ main() {
     
     # Run Phase 1: System Updates and UFW Setup
     phase1_system_updates_and_ufw
-    
-    # Run Phase 2: SSH Hardening
+
+    # Run Phase 2: Non-root User Setup
+    phase2_non_root_user_setup
+
+    # Run Phase 3: SSH Hardening
     phase2_ssh_hardening
-    
-    # Run Phase 3: Fail2ban Setup
+
+    # Run Phase 4: Fail2ban Setup
     phase3_fail2ban_setup
-    
+
     # Future phases will be implemented here
-    info "Phases 1, 2, and 3 complete. Additional phases will be implemented in subsequent updates."
+    info "Phases 1 through 4 complete. Additional phases will be implemented in subsequent updates."
 }
 
 # Execute main function
