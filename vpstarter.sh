@@ -178,8 +178,8 @@ phase2_ssh_hardening() {
             error "Port must be a valid number"
         fi
         
-        if [[ "$user_port" -lt 1 || "$user_port" -gt 65535 ]]; then
-            error "Port must be between 1 and 65535"
+        if [[ "$user_port" -lt 10000 || "$user_port" -gt 65535 ]]; then
+            error "Port must be between 10000 and 65535"
         fi
         
         SSH_CUSTOM_PORT=$user_port
