@@ -566,7 +566,7 @@ EOF
 # PHASE 5: Fail2ban SSH Jail Testing
 # ==========================================
 
-phase4_fail2ban_jail_testing() {
+phase5_fail2ban_jail_testing() {
     info "Starting Phase 5: Fail2ban SSH Jail Testing"
     echo "=========================================="
 
@@ -704,7 +704,7 @@ main() {
     phase4_fail2ban_setup
 
     # Run Phase 5: Fail2ban SSH Jail Testing
-    phase4_fail2ban_jail_testing
+    phase5_fail2ban_jail_testing
 
     info "Phases 1 through 5 complete. VPS hardening workflow finished."
 }
