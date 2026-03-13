@@ -831,24 +831,120 @@ EOF
     echo "                            IMPORTANT NOTES"
     echo "================================================================================"
     echo ""
-    echo "  - SSH is now running on port $SSH_CUSTOM_PORT"
-    echo "  - Port 22 has been denied in UFW (if applicable)"
+    echo "  - SSH is configured to run on port $SSH_CUSTOM_PORT (will be active after final restart)"
+    echo "  - Port 22 will be denied in UFW during the final phase"
     echo "  - Keep your SSH private key secure - it's your only authentication method"
     echo "  - The server will now reject password-based SSH login attempts"
     echo "  - Fail2ban will ban IPs that make 3+ failed login attempts in 10 minutes"
     echo ""
     echo "================================================================================"
-    echo "                          SETUP COMPLETE!"
+    echo "                      PHASE 6 COMPLETE - ONE STEP REMAINING"
     echo "================================================================================"
     echo ""
-    success "VPS Kickstarter provisioning completed successfully!"
+    success "Phase 6 completed: Final report generated!"
     echo ""
-    echo "Your server is now hardened and ready for use."
-    echo "Connection details have been saved to: $ssh_config_file"
-    echo ""
-    echo "================================================================================"
+    echo "Phase 7 will now restart SSH service and complete the setup."
+    echo "Your current connection will be disconnected."
     echo ""
     success "Phase 6 completed: Final report generated and connection instructions provided"
+    echo "=========================================="
+}
+
+# ==========================================
+# PHASE 7: Final SSH Service Restart with User Confirmation
+# ==========================================
+
+phase7_ssh_restart_and_confirmation() {
+    info "Starting Phase 7: SSH Service Restart with User Confirmation"
+    echo "=========================================="
+    
+    # Step 1: Display prominent warning about impending SSH restart
+    echo ""
+    echo -e "${RED}================================================================================${NC}"
+    echo -e "${RED}                        FINAL STEP: SSH SERVICE RESTART                         ${NC}"
+    echo -e "${RED}================================================================================${NC}"
+    echo ""
+    echo -e "${YELLOW}WARNING: SSH service will now restart with the new configuration!${NC}"
+    echo -e "${YELLOW}WARNING: This will disconnect your current session on port 22.${NC}"
+    echo ""
+    echo -e "${YELLOW}Current SSH connection details:${NC}"
+    echo "  - You are currently connected on: port 22"
+    echo "  - After restart, SSH will use: port $SSH_CUSTOM_PORT"
+    echo "  - You will need to reconnect using: ssh -p $SSH_CUSTOM_PORT $NEW_USERNAME@$(hostname -I | awk '{print $1}')"
+    echo ""
+    echo -e "${RED}================================================================================${NC}"
+    echo ""
+    
+    # Step 2: Prompt for user confirmation
+    local confirm_restart
+    while true; do
+        read -p "Type 'yes' when ready to restart SSH and complete the setup: " confirm_restart
+        if [[ "${confirm_restart,,}" == "yes" ]]; then
+            break
+        fi
+        warning "You must type 'yes' to proceed with SSH restart and complete the setup."
+    done
+    
+    echo ""
+    info "User confirmed. Proceeding with final steps..."
+    
+    # Step 3: Delete the Allow SSH rule in UFW (port 22)
+    info "Deleting UFW rule: Allow SSH on port 22..."
+    if ufw delete allow ssh; then
+        success "UFW rule removed: SSH on port 22 is now denied"
+    else
+        warning "Could not delete UFW SSH rule (may not exist or already removed)"
+    fi
+    
+    # Display updated UFW status
+    info "Updated UFW status:"
+    ufw status
+    
+    # Step 4: Restart SSH service
+    echo ""
+    info "Restarting SSH service to apply new configuration..."
+    info "New SSH settings will take effect:"
+    echo "  - Port: $SSH_CUSTOM_PORT"
+    echo "  - PasswordAuthentication: no"
+    echo "  - PermitRootLogin: prohibit-password"
+    echo ""
+    
+    # Restart SSH service
+    if systemctl restart ssh; then
+        success "SSH service restarted successfully"
+    else
+        error "Failed to restart SSH service. Check configuration with: sshd -t"
+    fi
+    
+    # Verify SSH is running on the new port
+    sleep 2
+    info "Verifying SSH service is active on port $SSH_CUSTOM_PORT..."
+    if systemctl is-active --quiet ssh; then
+        success "SSH service is running"
+    else
+        warning "SSH service status could not be verified (may still be starting)"
+    fi
+    
+    # Step 5: Display final completion message
+    echo ""
+    echo -e "${GREEN}================================================================================${NC}"
+    echo -e "${GREEN}                         SETUP COMPLETE!                                       ${NC}"
+    echo -e "${GREEN}================================================================================${NC}"
+    echo ""
+    echo -e "${GREEN}SSH service has been restarted with the hardened configuration.${NC}"
+    echo ""
+    echo "Your current connection on port 22 has been terminated."
+    echo ""
+    echo "To reconnect to your server, use:"
+    echo "  ssh -p $SSH_CUSTOM_PORT $NEW_USERNAME@$(hostname -I | awk '{print $1}')"
+    echo ""
+    echo "Or if you copied the SSH config to your local machine:"
+    echo "  ssh $(hostname -f 2>/dev/null || hostname)"
+    echo ""
+    echo -e "${GREEN}================================================================================${NC}"
+    echo ""
+    
+    success "Phase 7 completed: SSH service restarted, port 22 denied, setup complete"
     echo "=========================================="
 }
 
@@ -879,6 +975,9 @@ main() {
 
     # Run Phase 6: Final Report and Connection Instructions
     phase6_final_report
+
+    # Run Phase 7: SSH Service Restart with User Confirmation
+    phase7_ssh_restart_and_confirmation
 }
 
 # Execute main function
